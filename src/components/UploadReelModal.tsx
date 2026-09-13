@@ -376,7 +376,7 @@ export const UploadReelModal: React.FC<UploadReelModalProps> = ({
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Publish Video</span>
+                  <span>Post</span>
                 </>
               )}
             </button>

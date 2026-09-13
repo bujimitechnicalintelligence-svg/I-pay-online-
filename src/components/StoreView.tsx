@@ -7,7 +7,8 @@ import { UserAccount, ProductItem, ChatContact } from '../types';
 import { 
   getActiveStoreProducts, 
   saveNewStoreProduct, 
-  getTodayProductPostsCount
+  getTodayProductPostsCount,
+  DAILY_PRODUCT_LIMIT
 } from '../utils/appDatabase';
 import { 
   subscribeToStoreProducts, 
@@ -213,7 +214,7 @@ export const StoreView: React.FC<StoreViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Browse products, chat sellers directly, or post up to 3 products per day (listings active for 1 month).
+            Browse products, chat sellers directly, or post up to {DAILY_PRODUCT_LIMIT} products per day (listings active for 1 month).
           </p>
         </div>
 
@@ -229,7 +230,7 @@ export const StoreView: React.FC<StoreViewProps> = ({
             <Plus className="w-4 h-4" />
             <span>Post Product</span>
             <span className="ml-1 text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded-md font-mono">
-              {todayPostsCount}/3
+              {todayPostsCount}/{DAILY_PRODUCT_LIMIT}
             </span>
           </button>
         </div>
@@ -254,7 +255,7 @@ export const StoreView: React.FC<StoreViewProps> = ({
         <div className="px-3 py-1.5 bg-white rounded-xl border border-gray-200 text-[11px] text-gray-600 flex items-center space-x-2 shrink-0 self-start sm:self-auto shadow-2xs">
           <Clock className="w-3.5 h-3.5 text-emerald-600" />
           <span>
-            Today: <strong>{todayPostsCount}/3 posted</strong> (Max 3 daily)
+            Today: <strong>{todayPostsCount}/{DAILY_PRODUCT_LIMIT} posted</strong> (Max {DAILY_PRODUCT_LIMIT} daily)
           </span>
         </div>
 
@@ -525,14 +526,14 @@ export const StoreView: React.FC<StoreViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || todayPostsCount >= 3}
+                  disabled={isSubmitting || todayPostsCount >= DAILY_PRODUCT_LIMIT}
                   className={`w-2/3 py-2.5 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer ${
-                    todayPostsCount >= 3
+                    todayPostsCount >= DAILY_PRODUCT_LIMIT
                       ? 'bg-gray-400 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-700'
                   }`}
                 >
-                  {isSubmitting ? 'Publishing...' : 'Publish Product (30 Days Active)'}
+                  {isSubmitting ? 'Posting...' : 'Post'}
                 </button>
               </div>
 

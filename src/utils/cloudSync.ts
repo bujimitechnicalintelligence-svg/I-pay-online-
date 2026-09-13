@@ -40,6 +40,9 @@ export function subscribeToChatMessages(
       const msgs: ChatMessage[] = [];
       snapshot.forEach(docSnap => {
         const data = docSnap.data();
+        if (data.deletedForEveryone) {
+          return;
+        }
         msgs.push({
           id: docSnap.id,
           senderId: data.senderId,
@@ -131,6 +134,30 @@ export async function sendCrossDeviceChatMessage(
 
 export const sendCloudChatMessage = sendCrossDeviceChatMessage;
 
+export async function deleteCloudChatMessage(messageId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'chat_messages', messageId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Failed to delete chat message from Firestore:', err);
+  }
+}
+
+export async function deleteCloudChatHistory(chatId: string, currentUserId?: string): Promise<void> {
+  try {
+    const msgsCol = collection(db, 'chat_messages');
+    const q = query(msgsCol, where('chatId', '==', chatId), limit(200));
+    const snap = await getDocs(q);
+    const batch = writeBatch(db);
+    snap.forEach(docSnap => {
+      batch.delete(docSnap.ref);
+    });
+    await batch.commit();
+  } catch (err) {
+    console.warn('Failed to delete chat history from Firestore:', err);
+  }
+}
+
 // ==========================================
 // 2. CROSS-DEVICE STORE PRODUCTS
 // ==========================================
@@ -187,6 +214,28 @@ export async function publishCloudStoreProduct(product: ProductItem): Promise<vo
     await setDoc(docRef, product);
   } catch (err) {
     console.warn('Failed to publish store product to cloud Firestore:', err);
+  }
+}
+
+export async function deleteCloudStoreProduct(productId: string): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'store_products', productId);
+    await deleteDoc(docRef);
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete store product from Firestore:', err);
+    return false;
+  }
+}
+
+export async function updateCloudStoreProduct(productId: string, updates: Partial<ProductItem>): Promise<boolean> {
+  try {
+    const docRef = doc(db, 'store_products', productId);
+    await updateDoc(docRef, updates);
+    return true;
+  } catch (err) {
+    console.warn('Failed to update store product in Firestore:', err);
+    return false;
   }
 }
 
@@ -456,6 +505,7 @@ export async function addCloudVideoComment(videoId: string, comment: VideoCommen
       id: comment.id,
       authorName: comment.authorName,
       authorAvatar: comment.authorAvatar || '',
+      authorId: comment.authorId || '',
       text: comment.text,
       timestamp: comment.timestamp,
       createdAt: Date.now()
@@ -487,6 +537,7 @@ export function subscribeToVideoComments(
           id: docSnap.id,
           authorName: d.authorName || 'Member',
           authorAvatar: d.authorAvatar || '',
+          authorId: d.authorId || '',
           text: d.text || '',
           timestamp: d.timestamp || 'Just now'
         });

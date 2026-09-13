@@ -10,7 +10,7 @@ const NOTIFICATIONS_KEY = 'ipay_notifications_v3';
 const UNREAD_CHATS_KEY = 'ipay_unread_chats_v3';
 
 const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000; // 30 days expiration
-const DAILY_PRODUCT_LIMIT = 3;
+export const DAILY_PRODUCT_LIMIT = 40; // 40 posts per day rule
 
 // Empty initial lists: real data only from database
 const INITIAL_FOLLOWERS: FollowUserItem[] = [];
@@ -167,7 +167,7 @@ export function saveNewStoreProduct(
   if (currentCount >= DAILY_PRODUCT_LIMIT) {
     return {
       success: false,
-      error: `Daily limit reached: Community rules allow a maximum of 3 products per day (You have posted ${currentCount}/3 today). Please try again tomorrow!`
+      error: `Daily limit reached: Community rules allow a maximum of ${DAILY_PRODUCT_LIMIT} products per day (You have posted ${currentCount}/${DAILY_PRODUCT_LIMIT} today). Please try again tomorrow!`
     };
   }
 
@@ -206,6 +206,41 @@ export function saveNewStoreProduct(
     return { success: true, product: newProduct };
   } catch (err) {
     return { success: false, error: 'Failed to save product to database.' };
+  }
+}
+
+export function updateStoreProduct(
+  productId: string, 
+  updates: Partial<ProductItem>
+): boolean {
+  try {
+    const raw = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    if (!raw) return false;
+    const list: ProductItem[] = JSON.parse(raw);
+    const index = list.findIndex(p => p.id === productId);
+    if (index >= 0) {
+      list[index] = { ...list[index], ...updates };
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(list));
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('Failed to update product in local database', err);
+    return false;
+  }
+}
+
+export function deleteStoreProduct(productId: string): boolean {
+  try {
+    const raw = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    if (!raw) return false;
+    const list: ProductItem[] = JSON.parse(raw);
+    const updated = list.filter(p => p.id !== productId);
+    localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(updated));
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete product from local database', err);
+    return false;
   }
 }
 

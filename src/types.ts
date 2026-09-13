@@ -32,6 +32,7 @@ export interface VideoComment {
   id: string;
   authorName: string;
   authorAvatar: string;
+  authorId?: string;
   text: string;
   timestamp: string;
 }

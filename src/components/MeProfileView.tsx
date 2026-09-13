@@ -2,18 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, MapPin, Mail, Shield, HardDrive, Trash2, LogOut, 
   Smartphone, Clock, Check, Sparkles, Settings, Users, UserPlus, 
-  Heart, Star, Lock, Eye, EyeOff, X, Award, AlertCircle, RefreshCw
+  Heart, Star, Lock, Eye, EyeOff, X, Award, AlertCircle, RefreshCw,
+  ShoppingBag, Edit3
 } from 'lucide-react';
-import { UserAccount, ShortVideo, FollowUserItem, UserSocialStats } from '../types';
+import { UserAccount, ShortVideo, FollowUserItem, UserSocialStats, ProductItem } from '../types';
 import { clearActiveSession, updateUserAccount, validateStrongPassword } from '../utils/authStorage';
 import { getActiveVideos, getCachedVideoIds, clearAllCachedVideos, deleteVideo } from '../utils/videoStorage';
-import { deleteCloudVideoReel } from '../utils/cloudSync';
+import { deleteCloudVideoReel, deleteCloudStoreProduct, updateCloudStoreProduct } from '../utils/cloudSync';
 import { 
   getUserSocialStats, 
   getFollowersList, 
   getFollowingList, 
   unfollowUser, 
-  dispatchNotification 
+  dispatchNotification,
+  getActiveStoreProducts,
+  updateStoreProduct,
+  deleteStoreProduct
 } from '../utils/appDatabase';
 import { ApkDownloadModal } from './ApkDownloadModal';
 
@@ -67,12 +71,31 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
   const [videoToDelete, setVideoToDelete] = useState<ShortVideo | null>(null);
   const [isDeletingVideo, setIsDeletingVideo] = useState(false);
 
+  // Products State
+  const [myProducts, setMyProducts] = useState<ProductItem[]>([]);
+  const [productToDelete, setProductToDelete] = useState<ProductItem | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+
   const loadData = () => {
     const cached = getCachedVideoIds();
     setCachedCount(cached.size);
     const all = getActiveVideos();
     const mine = all.filter(v => v.creator.toLowerCase() === currentUser.displayName.toLowerCase());
     setMyVideos(mine);
+
+    // Load user's products
+    const allProducts = getActiveStoreProducts();
+    const myProds = allProducts.filter(p => 
+      (p.sellerId && p.sellerId === currentUser.id) ||
+      (p.sellerName && p.sellerName.toLowerCase() === currentUser.displayName.toLowerCase()) ||
+      (p.sellerUsername && currentUser.username && p.sellerUsername.toLowerCase() === currentUser.username.toLowerCase())
+    );
+    setMyProducts(myProds);
 
     // Social stats & followers/following
     const stats = getUserSocialStats();
@@ -121,6 +144,84 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
     } finally {
       setIsDeletingVideo(false);
       setVideoToDelete(null);
+    }
+  };
+
+  // Handle Delete Product
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    setIsDeletingProduct(true);
+    const id = productToDelete.id;
+
+    try {
+      // 1. Delete locally from app database
+      deleteStoreProduct(id);
+
+      // 2. Delete from cloud database
+      await deleteCloudStoreProduct(id);
+
+      // 3. Update state
+      setMyProducts(prev => prev.filter(p => p.id !== id));
+      setToastMessage('Product removed from store successfully.');
+      setTimeout(() => setToastMessage(null), 3500);
+    } catch (err) {
+      console.warn('Failed to delete product:', err);
+      setToastMessage('Product removed from your list.');
+      setTimeout(() => setToastMessage(null), 3500);
+    } finally {
+      setIsDeletingProduct(false);
+      setProductToDelete(null);
+    }
+  };
+
+  // Handle Start Edit Product
+  const handleStartEditProduct = (prod: ProductItem) => {
+    setEditingProduct(prod);
+    setEditName(prod.name);
+    setEditPrice(prod.priceNgn.toString());
+    setEditDesc(prod.description);
+  };
+
+  // Handle Save Edited Product
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    if (!editName.trim()) {
+      alert('Please enter a product name.');
+      return;
+    }
+    const numPrice = parseFloat(editPrice) || 0;
+    if (numPrice <= 0) {
+      alert('Please enter a valid price in Naira.');
+      return;
+    }
+
+    setIsSavingProduct(true);
+    const updates: Partial<ProductItem> = {
+      name: editName.trim(),
+      priceNgn: Math.max(100, Math.floor(numPrice)),
+      description: editDesc.trim()
+    };
+
+    try {
+      // 1. Update local database
+      updateStoreProduct(editingProduct.id, updates);
+
+      // 2. Update Firestore
+      await updateCloudStoreProduct(editingProduct.id, updates);
+
+      // 3. Update component state
+      setMyProducts(prev => prev.map(p => p.id === editingProduct.id ? { ...p, ...updates } : p));
+      setToastMessage('Product updated successfully!');
+      setTimeout(() => setToastMessage(null), 3500);
+      setEditingProduct(null);
+    } catch (err) {
+      console.warn('Failed to update product:', err);
+      setToastMessage('Product updated locally.');
+      setTimeout(() => setToastMessage(null), 3500);
+      setEditingProduct(null);
+    } finally {
+      setIsSavingProduct(false);
     }
   };
 
@@ -467,6 +568,69 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* My Listed Products (Edit & Delete Management) */}
+      <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <ShoppingBag className="w-4 h-4 text-emerald-600" />
+            <h3 className="font-bold text-sm text-gray-900">My Listed Products</h3>
+          </div>
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            {myProducts.length} Active
+          </span>
+        </div>
+
+        {myProducts.length === 0 ? (
+          <p className="text-xs text-gray-400 py-3 text-center">
+            You haven't posted any products yet. Go to the <strong>Store</strong> tab and tap <strong>Sell Item</strong> to list products!
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {myProducts.map((prod) => (
+              <div 
+                key={prod.id} 
+                className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition space-x-3"
+              >
+                <img 
+                  src={prod.image} 
+                  alt={prod.name} 
+                  className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0" 
+                />
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-bold text-gray-900 truncate">
+                    {prod.name}
+                  </h4>
+                  <p className="text-xs font-extrabold text-emerald-700 mt-0.5">
+                    ₦{prod.priceNgn.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">
+                    {prod.description}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditProduct(prod)}
+                    className="p-2 rounded-xl bg-white border border-gray-200 hover:bg-emerald-50 hover:border-emerald-300 text-gray-700 hover:text-emerald-700 transition cursor-pointer"
+                    title="Edit Product Details"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProductToDelete(prod)}
+                    className="p-2 rounded-xl bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 text-gray-700 hover:text-red-700 transition cursor-pointer"
+                    title="Delete Product"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -828,6 +992,143 @@ export const MeProfileView: React.FC<MeProfileViewProps> = ({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: DELETE PRODUCT CONFIRMATION */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="text-base font-extrabold text-gray-950">Remove Product?</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Are you sure you want to delete <strong className="text-gray-800">"{productToDelete.name}"</strong>?
+              </p>
+              <p className="text-[11px] text-red-600 font-medium">
+                This item will be removed from your profile and the I-pay-online Store across all devices.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeletingProduct}
+                className="w-1/2 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold text-xs hover:bg-gray-100 transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteProduct}
+                disabled={isDeletingProduct}
+                className="w-1/2 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition cursor-pointer disabled:opacity-50 flex items-center justify-center space-x-1.5"
+              >
+                {isDeletingProduct ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: EDIT PRODUCT DETAILS */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-white rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 my-auto">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <Edit3 className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-base font-extrabold text-gray-900">Edit Product</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingProduct(null)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditProduct} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Product Title</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Brand New Smartphone"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Price (₦ Naira)</label>
+                <input
+                  type="number"
+                  min="100"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  placeholder="e.g. 25000"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-700">Description</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={3}
+                  placeholder="Describe your item..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  disabled={isSavingProduct}
+                  className="w-1/3 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-bold text-xs hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProduct}
+                  className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center space-x-1.5"
+                >
+                  {isSavingProduct ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -15,13 +15,17 @@ import {
   getPeopleRegisteredNearLocation,
   isUserBlocked,
   toggleBlockUser,
-  markContactAsRead
+  markContactAsRead,
+  getDeletedMessageIds,
+  getChatDeletedTimestamp
 } from '../utils/chatStorage';
 import { dispatchNotification, clearUnreadChatBadge } from '../utils/appDatabase';
 import { 
   computeChatId, 
   subscribeToChatMessages, 
   sendCloudChatMessage, 
+  deleteCloudChatMessage,
+  deleteCloudChatHistory,
   syncUserProfileToCloud, 
   subscribeToCrossDeviceUsers 
 } from '../utils/cloudSync';
@@ -140,12 +144,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     // Real-time Firestore cross-device subscription
     const chatId = computeChatId(currentUser.id, activeContact.id);
+    const deletedChatTs = getChatDeletedTimestamp(activeContact.id);
+
     const unsubscribe = subscribeToChatMessages(chatId, (cloudMsgs) => {
-      if (cloudMsgs.length > 0) {
+      const deletedIds = getDeletedMessageIds();
+      // Filter out messages that are tombstoned locally or prior to chat clearing
+      const validCloudMsgs = cloudMsgs.filter(m => {
+        if (deletedIds.has(m.id)) return false;
+        if (deletedChatTs && (m.createdAt || 0) <= deletedChatTs) return false;
+        return true;
+      });
+
+      if (validCloudMsgs.length > 0) {
         setMessages(prev => {
           const map = new Map<string, ChatMessage>();
-          prev.forEach(m => map.set(m.id, m));
-          cloudMsgs.forEach(m => {
+          prev.forEach(m => {
+            if (!deletedIds.has(m.id)) {
+              map.set(m.id, m);
+            }
+          });
+          validCloudMsgs.forEach(m => {
             // Determine if message was sent by me
             const isMe = m.senderId === currentUser.id;
             map.set(m.id, { ...m, isMe });
@@ -155,7 +173,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         });
 
         // Update local storage so offline access works seamlessly
-        cloudMsgs.forEach(m => {
+        validCloudMsgs.forEach(m => {
           addMessageToChat(activeContact.id, {
             ...m,
             isMe: m.senderId === currentUser.id
@@ -248,8 +266,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
   // Delete chat history confirmation
   const handleConfirmDeleteHistory = () => {
     if (!contactToDeleteHistory) return;
-    deleteChatHistory(contactToDeleteHistory.id);
-    if (activeContact?.id === contactToDeleteHistory.id) {
+    const contactId = contactToDeleteHistory.id;
+    deleteChatHistory(contactId);
+    
+    // Delete from Firestore cross-device chat collection
+    const chatId = computeChatId(currentUser.id, contactId);
+    deleteCloudChatHistory(chatId, currentUser.id).catch(e => console.warn('Cloud delete error:', e));
+
+    if (activeContact?.id === contactId) {
       setActiveContact(null);
     }
     setContactToDeleteHistory(null);
@@ -259,16 +283,22 @@ export const ChatView: React.FC<ChatViewProps> = ({
   // Delete message handlers
   const handleDeleteForBoth = () => {
     if (!activeContact || !selectedMessageForDelete) return;
-    deleteMessageForBoth(activeContact.id, selectedMessageForDelete.id);
-    setMessages(prev => prev.filter(m => m.id !== selectedMessageForDelete.id));
+    const msgId = selectedMessageForDelete.id;
+    deleteMessageForBoth(activeContact.id, msgId);
+    
+    // Delete from Firestore
+    deleteCloudChatMessage(msgId).catch(e => console.warn('Cloud delete msg error:', e));
+
+    setMessages(prev => prev.filter(m => m.id !== msgId));
     setSelectedMessageForDelete(null);
     refreshConversations();
   };
 
   const handleDeleteForMe = () => {
     if (!activeContact || !selectedMessageForDelete) return;
-    deleteMessageForMe(activeContact.id, selectedMessageForDelete.id);
-    setMessages(prev => prev.filter(m => m.id !== selectedMessageForDelete.id));
+    const msgId = selectedMessageForDelete.id;
+    deleteMessageForMe(activeContact.id, msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
     setSelectedMessageForDelete(null);
     refreshConversations();
   };
