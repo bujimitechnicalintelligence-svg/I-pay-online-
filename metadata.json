@@ -1,0 +1,6 @@
+{
+  "name": "I-pay-online",
+  "description": "I-pay-online Super App with 24-hour reels, offline video caching, chat, store, and personal profile.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

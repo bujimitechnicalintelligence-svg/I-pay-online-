@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "Real-time cross-device chat messages between users",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string" }
+      },
+      "required": ["chatId", "senderId", "receiverId", "text", "createdAt"]
+    },
+    "StoreProduct": {
+      "title": "Store Product",
+      "description": "Cross-device product items listed in Store with 30-day expiration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "category": { "type": "string" },
+        "sellerName": { "type": "string" },
+        "sellerId": { "type": "string" },
+        "sellerState": { "type": "string" },
+        "sellerLga": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["id", "title", "price", "sellerId", "createdAt", "expiresAt"]
+    },
+    "ShortVideoReel": {
+      "title": "Short Video Reel",
+      "description": "Cross-device 24-hour video reels feed with max 3-minute limit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "creator": { "type": "string" },
+        "creatorAvatar": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "likes": { "type": "number" },
+        "comments": { "type": "number" },
+        "soundTitle": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "expiresAt": { "type": "number" }
+      },
+      "required": ["id", "title", "creator", "createdAt", "expiresAt"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Public user profile information for discovering nearby members and chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "username": { "type": "string" },
+        "state": { "type": "string" },
+        "lga": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "lastSeen": { "type": "number" }
+      },
+      "required": ["id", "displayName", "username", "state", "lga"]
+    }
+  },
+  "firestore": {
+    "/chat_messages/{messageId}": {
+      "entity": "ChatMessage",
+      "description": "Real-time cross-device chat messages"
+    },
+    "/store_products/{productId}": {
+      "entity": "StoreProduct",
+      "description": "Store items visible to all devices with 30-day life"
+    },
+    "/video_reels/{reelId}": {
+      "entity": "ShortVideoReel",
+      "description": "24-hour video reels visible across all devices"
+    },
+    "/user_profiles/{userId}": {
+      "entity": "UserProfile",
+      "description": "Public profiles of registered users across devices"
+    }
+  }
+}

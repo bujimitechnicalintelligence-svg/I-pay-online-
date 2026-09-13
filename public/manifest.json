@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "I-pay-online",
+  "short_name": "I-pay-online",
+  "description": "I-pay-online app with 24-hour reels, offline video caching, chat, store, and personal profile.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/app-icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
